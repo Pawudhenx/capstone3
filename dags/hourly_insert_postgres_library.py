@@ -14,7 +14,7 @@ from load_from_csv import main as load_csv_main
 DEFAULT_ARGS = {"owner": "you", "retries": 1, "retry_delay": timedelta(minutes=5)}
 
 with DAG(
-    dag_id="dag1_hourly_insert_postgres",
+    dag_id="hourly_insert_postgres",
     start_date=datetime(2025,10,1),
     schedule="0 * * * *",  # setiap jam
     default_args=DEFAULT_ARGS,

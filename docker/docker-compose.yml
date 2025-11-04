@@ -24,7 +24,7 @@ services:
     restart: always 
     command: >
       bash -lc "
-      pip install --no-cache-dir -r /opt/airflow/app/requirements.txt &&
+      pip install --no-cache-dir -r /opt/airflow/app/requirement.txt &&
       airflow standalone
       "
     environment:
@@ -33,7 +33,7 @@ services:
       PG_DSN: "host=postgres user=postgres password=postgres dbname=library port=5432"
       PYTHONPATH: "/opt/airflow/app"
       # untuk BigQuery (isi nanti file kunci)
-      GOOGLE_APPLICATION_CREDENTIALS: "/keys/sa.json"
+      GOOGLE_APPLICATION_CREDENTIALS: "/keys/keys/jcdeah-006-b18fd9371986.json"
       BQ_PROJECT: "purwadika"
       BQ_DATASET: "fauzan_perpustakaan_capstone3"
     ports:
