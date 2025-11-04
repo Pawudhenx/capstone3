@@ -33,8 +33,8 @@ services:
       PG_DSN: "host=postgres user=postgres password=postgres dbname=library port=5432"
       PYTHONPATH: "/opt/airflow/app"
       # untuk BigQuery (isi nanti file kunci)
-      GOOGLE_APPLICATION_CREDENTIALS: "/keys/keys/jcdeah-006-b18fd9371986.json"
-      BQ_PROJECT: "purwadika"
+      GOOGLE_APPLICATION_CREDENTIALS: "/keys/jcdeah-006-b18fd9371986.json"
+      BQ_PROJECT: "jcdeah-006"
       BQ_DATASET: "fauzan_perpustakaan_capstone3"
     ports:
       - "8081:8080"  

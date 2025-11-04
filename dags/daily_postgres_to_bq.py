@@ -1,58 +1,92 @@
 from airflow import DAG
 from airflow.operators.python import PythonOperator
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta
 import os
 import pandas as pd
 import psycopg2
 from google.cloud import bigquery
+from google.oauth2 import service_account
 
 DEFAULT_ARGS = {"owner":"you","retries":1,"retry_delay":timedelta(minutes=5)}
-TABLES = ["members","books","loans"]
 
-def extract_hminus1(**context):
+# Kolom waktu per tabel (ubah kalau perlu)
+TABLES = {
+    "members": "created_at",
+    "books":   "created_at",   # ganti ke "updated_at" kalau memang begitu di DB
+    "loans":   "created_at",
+}
+
+EXTRACT_DIR = "/opt/airflow/extracts"
+
+def extract_hminus1(**_):
     dsn = os.getenv("PG_DSN", "host=postgres user=postgres password=postgres dbname=library port=5432")
-    today = date.today()
-    start = datetime.combine(today - timedelta(days=1), datetime.min.time())
-    end   = datetime.combine(today, datetime.min.time())
+    # pakai UTC biar konsisten dg Airflow (default UTC)
+    end = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    start = end - timedelta(days=1)
 
-    os.makedirs("/opt/airflow/extracts", exist_ok=True)
+    os.makedirs(EXTRACT_DIR, exist_ok=True)
     out_paths = []
-    with psycopg2.connect(dsn) as conn:
-        for t in TABLES:
-            q = f"SELECT * FROM {t} WHERE created_at >= %s AND created_at < %s"
-            df = pd.read_sql(q, conn, params=(start, end))
-            path = f"/opt/airflow/extracts/{t}.parquet"
-            df.to_parquet(path, index=False)
-            out_paths.append(path)
 
-    # opsional: push list file untuk di-inspect
+    with psycopg2.connect(dsn) as conn:
+        for table, ts_col in TABLES.items():
+            q = f"""
+                SELECT *
+                FROM {table}
+                WHERE {ts_col} >= %s AND {ts_col} < %s
+            """
+            df = pd.read_sql(q, conn, params=(start, end))
+
+            if df.empty:
+                print(f"[EXTRACT] {table}: 0 rows (skip write)")
+                continue
+
+            path = f"{EXTRACT_DIR}/{table}.parquet"
+            df.to_parquet(path, index=False)  # butuh pyarrow terpasang
+            out_paths.append(path)
+            print(f"[EXTRACT] {table}: {len(df)} rows -> {path}")
+
     return out_paths
 
-def load_to_bq(**context):
+def load_to_bq(**_):
     project = os.environ["BQ_PROJECT"]
     dataset = os.environ["BQ_DATASET"]
-    client = bigquery.Client(project=project)
+    creds = service_account.Credentials.from_service_account_file(os.environ["GOOGLE_APPLICATION_CREDENTIALS"])
+    client = bigquery.Client(project=project, credentials=creds)
 
-    for t in TABLES:
-        path = f"/opt/airflow/extracts/{t}.parquet"
-        table_id = f"{project}.{dataset}.{t}"
+    # pastikan dataset ada
+    ds_ref = bigquery.Dataset(f"{project}.{dataset}")
+    try:
+        client.get_dataset(ds_ref)
+        print(f"[BQ] Dataset {dataset} exists")
+    except Exception:
+        client.create_dataset(ds_ref, exists_ok=True)
+        print(f"[BQ] Dataset {dataset} created")
 
+    for table, ts_col in TABLES.items():
+        path = f"{EXTRACT_DIR}/{table}.parquet"
+        if not os.path.exists(path):
+            print(f"[LOAD] Skip {table}: file not found (kemungkinan 0 rows kemarin)")
+            continue
+
+        table_id = f"{project}.{dataset}.{table}"
         job_config = bigquery.LoadJobConfig(
             source_format=bigquery.SourceFormat.PARQUET,
             write_disposition=bigquery.WriteDisposition.WRITE_APPEND,
             time_partitioning=bigquery.TimePartitioning(
                 type_=bigquery.TimePartitioningType.DAY,
-                field="created_at",
+                field=ts_col,  # pastikan kolom ini ada di data
             ),
             autodetect=True,
         )
+
         with open(path, "rb") as f:
             job = client.load_table_from_file(f, table_id, job_config=job_config)
         job.result()
+        print(f"[LOAD] {table} -> {table_id} (APPEND)")
 
 with DAG(
     dag_id="dag2_daily_postgres_to_bq",
-    start_date=datetime(2025,10,1),
+    start_date=datetime(2025, 10, 1),
     schedule="@daily",
     default_args=DEFAULT_ARGS,
     catchup=False,
@@ -65,7 +99,7 @@ with DAG(
     )
     t_load = PythonOperator(
         task_id="load_to_bigquery_incremental_partitioned",
-        python_callable=load_to_bq
+        python_callable=load_to_bq,
     )
 
     t_extract >> t_load
