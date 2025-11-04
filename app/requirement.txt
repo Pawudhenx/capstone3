@@ -1,2 +1,4 @@
 psycopg2-binary==2.9.9
-python-dateutil==2.9.0.post0
+pandas==2.2.2
+google-cloud-bigquery==3.25.0
+apache-airflow-providers-google==10.20.0

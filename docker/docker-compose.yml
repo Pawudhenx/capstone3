@@ -1,0 +1,51 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: pg_capstone3
+    restart: always 
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: library
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d library"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  airflow:
+    image: apache/airflow:2.9.3
+    container_name: airflow_capstone3
+    restart: always 
+    command: >
+      bash -lc "
+      pip install --no-cache-dir -r /opt/airflow/app/requirements.txt &&
+      airflow standalone
+      "
+    environment:
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      # koneksi ke postgres (service name di compose)
+      PG_DSN: "host=postgres user=postgres password=postgres dbname=library port=5432"
+      PYTHONPATH: "/opt/airflow/app"
+      # untuk BigQuery (isi nanti file kunci)
+      GOOGLE_APPLICATION_CREDENTIALS: "/keys/sa.json"
+      BQ_PROJECT: "purwadika"
+      BQ_DATASET: "fauzan_perpustakaan_capstone3"
+    ports:
+      - "8081:8080"  
+    volumes:
+      - ../dags:/opt/airflow/dags
+      - ../app:/opt/airflow/app
+      - ../data:/opt/airflow/data
+      - ../keys:/keys  
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:
