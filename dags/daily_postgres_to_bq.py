@@ -9,10 +9,10 @@ from google.oauth2 import service_account
 
 DEFAULT_ARGS = {"owner":"you","retries":1,"retry_delay":timedelta(minutes=5)}
 
-# Kolom waktu per tabel (ubah kalau perlu)
+# Kolom waktu per tabel
 TABLES = {
     "members": "created_at",
-    "books":   "created_at",   # ganti ke "updated_at" kalau memang begitu di DB
+    "books":   "created_at", 
     "loans":   "created_at",
 }
 
@@ -20,7 +20,7 @@ EXTRACT_DIR = "/opt/airflow/extracts"
 
 def extract_hminus1(**_):
     dsn = os.getenv("PG_DSN", "host=postgres user=postgres password=postgres dbname=library port=5432")
-    # pakai UTC biar konsisten dg Airflow (default UTC)
+    # UTC agar konsisten dengan airflow
     end = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
     start = end - timedelta(days=1)
 
@@ -41,7 +41,7 @@ def extract_hminus1(**_):
                 continue
 
             path = f"{EXTRACT_DIR}/{table}.parquet"
-            df.to_parquet(path, index=False)  # butuh pyarrow terpasang
+            df.to_parquet(path, index=False) 
             out_paths.append(path)
             print(f"[EXTRACT] {table}: {len(df)} rows -> {path}")
 
@@ -53,7 +53,7 @@ def load_to_bq(**_):
     creds = service_account.Credentials.from_service_account_file(os.environ["GOOGLE_APPLICATION_CREDENTIALS"])
     client = bigquery.Client(project=project, credentials=creds)
 
-    # pastikan dataset ada
+    # memastikan dataset ada
     ds_ref = bigquery.Dataset(f"{project}.{dataset}")
     try:
         client.get_dataset(ds_ref)
@@ -74,7 +74,7 @@ def load_to_bq(**_):
             write_disposition=bigquery.WriteDisposition.WRITE_APPEND,
             time_partitioning=bigquery.TimePartitioning(
                 type_=bigquery.TimePartitioningType.DAY,
-                field=ts_col,  # pastikan kolom ini ada di data
+                field=ts_col,  
             ),
             autodetect=True,
         )

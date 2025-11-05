@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 import os, sys
 from pathlib import Path
 
-# pastikan modul app bisa diimport
+# memastikan modul app bisa diimport
 app_path = Path("/opt/airflow/app")
 if str(app_path) not in sys.path:
     sys.path.append(str(app_path))
@@ -22,7 +22,6 @@ with DAG(
     tags=["capstone3","postgres","dummy"],
 ):
     def _run():
-        # Postgres ada di service 'postgres'
         os.environ["PG_DSN"] = "host=postgres user=postgres password=postgres dbname=library port=5432"
         load_csv_main()
 
